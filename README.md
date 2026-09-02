@@ -1,6 +1,8 @@
 # edge
 
-**Low-latency CV detector pipeline (gRPC client -> JetStream -> consumers)**
+**Low-latency CV detector pipeline**
+video → ONNX YOLO → watchlist alerts → NATS → ClickHouse. 
+Built as a systems-level exploration of real-time on-prem recognition flows.
 
 ```
 ┌──────────────┐  gRPC   ┌──────────────┐  gRPC   ┌──────────────────┐
@@ -38,7 +40,6 @@ brew install opencv onnxruntime protobuf grpc
 # Ubuntu
 sudo apt install cmake g++ libopencv-dev \
   libprotobuf-dev protobuf-compiler libgrpc++-dev protobuf-compiler-grpc
-# ONNX Runtime: download from Microsoft or set ONNXRUNTIME_ROOT
 ```
 
 ## Docker client
@@ -69,18 +70,6 @@ cmake --build build -j
 ## Run (locally)
 
 ```bash
-# terminal 1 NATS
-nats-server -js
-
-# terminal 2
-./build/nats_publisher
-
-# terminal 3
-./build/ingest_server
-
-# terminal 4 consumer
-./build/consumer
-
 # terminal 5 CV client (webcam 0 or mp4)
 ./build/edge_client 0 models/yolo11n.onnx
 # or
@@ -89,12 +78,15 @@ nats-server -js
 
 Environment:
 
-| Variable        | Default              | Used by          |
-|-----------------|----------------------|------------------|
-| `INGEST_ADDR`   | `localhost:50052`    | edge_client      |
-| `GRPC_ADDR`     | `0.0.0.0:50051/52`   | publisher/ingest |
-| `PUBLISHER_ADDR`| `localhost:50051`    | ingest           |
-| `NATS_URL`      | `nats://localhost:4222` | publisher, consumer |
+| Variable                          | Default                              | Used by                          |
+| --------------------------------- | ------------------------------------ | -------------------------------- |
+| `INGEST_ADDR`                     | `localhost:50052`                    | edge_client                      |
+| `GRPC_ADDR`                       | `0.0.0.0:50051/52`                   | publisher / ingest               |
+| `PUBLISHER_ADDR`                  | `localhost:50051`                    | ingest                           |
+| `NATS_URL`                        | `nats://localhost:4222`              | publisher, consumer, ch-consumer |
+| `OTEL_EXPORTER_OTLP_ENDPOINT`     | `http://localhost:4318/v1/logs`      | all services ( `WITH_OTEL`)  |
+| `OTEL_EXPORTER_OTLP_LOGS_ENDPOINT`| (falls back to above)                | all services ( `WITH_OTEL`)  |
+| `OTEL_ENVIRONMENT`                | `development`                        | all services ( `WITH_OTEL`)  |
 
 ## Pipeline
 
@@ -135,3 +127,28 @@ docker exec -it edge-clickhouse-1 clickhouse-client --password pass \
 ```
 
 Disable: `-DBUILD_CLICKHOUSE_CONSUMER=OFF`.
+
+## Observability (OpenTelemetry structured logging)
+
+Services use **spdlog**
+
+### Enable at build time
+
+```bash
+cmake -B build -DWITH_OTEL=ON \
+  -DCMAKE_BUILD_TYPE=Release \
+  -DONNXRUNTIME_ROOT=/path/to/onnxruntime
+cmake --build build -j
+```
+When `WITH_OTEL=OFF` (default) the OTel code is compiled out
+
+### Runtime config
+
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `OTEL_EXPORTER_OTLP_ENDPOINT` | `http://localhost:4318/v1/logs` | OTLP/HTTP collector endpoint |
+| `OTEL_EXPORTER_OTLP_LOGS_ENDPOINT` | (falls back to above) | Override for logs only |
+| `OTEL_ENVIRONMENT` | `development` | `deployment.environment` resource attribute |
+
+Each process sets `service.name` automatically (`edge_client`, `ingest_server`,
+`nats_publisher`, `consumer`, `clickhouse_consumer`).

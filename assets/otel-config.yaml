@@ -1,0 +1,28 @@
+receivers:
+  otlp:
+    protocols:
+      http:
+        endpoint: 0.0.0.0:4318
+      grpc:
+        endpoint: 0.0.0.0:4317
+
+processors:
+  batch:
+
+exporters:
+  # Local debug – prints structured logs to container stdout
+  debug:
+    verbosity: detailed
+
+  # forward to real backend
+  # otlphttp/backend:
+  #   endpoint: https://your-backend:4318
+  #   headers:
+  #     Authorization: "Bearer ..."
+
+service:
+  pipelines:
+    logs:
+      receivers: [otlp]
+      processors: [batch]
+      exporters: [debug]

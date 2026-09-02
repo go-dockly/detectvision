@@ -97,6 +97,41 @@ if(NOT ONNXRUNTIME_LIB)
   message(WARNING "ONNX Runtime not found – edge_cv client will not build")
 endif()
 
+option(WITH_OTEL "Enable OpenTelemetry structured logging via spdlog sink" OFF)
+
+if(WITH_OTEL)
+  message(STATUS "OpenTelemetry support: ON")
+
+  # Core SDK (Logs + Resource + OTLP HTTP exporter)
+  set(BUILD_TESTING OFF CACHE BOOL "" FORCE)
+  set(WITH_OTLP_HTTP ON CACHE BOOL "" FORCE)
+  set(WITH_OTLP_GRPC OFF CACHE BOOL "" FORCE)   # keep deps light; HTTP enough
+  set(WITH_LOGS_PREVIEW ON CACHE BOOL "" FORCE) # older tags; no-op on recent
+  set(WITH_STL ON CACHE BOOL "" FORCE)
+
+  FetchContent_Declare(opentelemetry-cpp
+    GIT_REPOSITORY https://github.com/open-telemetry/opentelemetry-cpp.git
+    GIT_TAG v1.17.0
+    GIT_SHALLOW TRUE)
+  FetchContent_MakeAvailable(opentelemetry-cpp)
+
+  # spdlog sink lives in the contrib repo
+  FetchContent_Declare(opentelemetry-cpp-contrib
+    GIT_REPOSITORY https://github.com/open-telemetry/opentelemetry-cpp-contrib.git
+    GIT_TAG main
+    GIT_SHALLOW TRUE)
+  FetchContent_GetProperties(opentelemetry-cpp-contrib)
+  if(NOT opentelemetry-cpp-contrib_POPULATED)
+    FetchContent_Populate(opentelemetry-cpp-contrib)
+  endif()
+  add_subdirectory(
+    ${opentelemetry-cpp-contrib_SOURCE_DIR}/instrumentation/spdlog
+    ${CMAKE_BINARY_DIR}/otel-spdlog-sink
+  )
+else()
+  message(STATUS "OpenTelemetry support: OFF (enable with -DWITH_OTEL=ON)")
+endif()
+
 find_package(nlohmann_json QUIET)
 if(NOT nlohmann_json_FOUND)
   FetchContent_Declare(json
@@ -187,18 +222,34 @@ target_link_libraries(edge_proto PUBLIC
 )
 
 # common
-add_library(edge_common INTERFACE)
-target_include_directories(edge_common INTERFACE
+add_library(edge_common
+  src/common/otel.cpp
+)
+target_include_directories(edge_common PUBLIC
   ${CMAKE_CURRENT_SOURCE_DIR}/src
   ${NATS_INCLUDE_DIRS}
 )
-target_link_libraries(edge_common INTERFACE
+target_link_libraries(edge_common PUBLIC
   edge_proto
   nlohmann_json::nlohmann_json
   spdlog::spdlog
   ${NATS_LIBRARIES}
   Threads::Threads
 )
+
+if(WITH_OTEL)
+  target_compile_definitions(edge_common PUBLIC WITH_OTEL)
+  target_link_libraries(edge_common PUBLIC
+    opentelemetry_logs
+    opentelemetry_exporter_otlp_http
+    opentelemetry_resources
+    opentelemetry_common
+    opentelemetry_spdlog_sink   # from contrib
+  )
+  target_include_directories(edge_common PUBLIC
+    ${opentelemetry-cpp-contrib_SOURCE_DIR}/instrumentation/spdlog/include
+  )
+endif()
 
 # CV pipeline lib + client (OpenCV / ONNX)
 if(OpenCV_FOUND AND ONNXRUNTIME_LIB)

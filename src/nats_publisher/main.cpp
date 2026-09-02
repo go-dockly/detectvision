@@ -8,6 +8,7 @@
 #include <spdlog/spdlog.h>
 
 #include "common/env.hpp"
+#include "common/otel.hpp"
 #include "publisher_service.hpp"
 
 namespace {
@@ -101,5 +102,6 @@ int main() {
 
   if (g_js) jsCtx_Destroy(g_js);
   if (g_nc) natsConnection_Destroy(g_nc);
+  edge::otel::shutdown();
   return 0;
 }

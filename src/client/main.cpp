@@ -11,6 +11,7 @@
 #include <spdlog/spdlog.h>
 
 #include "common/env.hpp"
+#include "common/otel.hpp"
 #include "detection/v1/ingest_service.grpc.pb.h"
 #include "pipeline.hpp"
 
@@ -121,5 +122,6 @@ int main(int argc, char** argv) {
 
   pipeline.stop();
   spdlog::info("stopped");
+  edge::otel::shutdown();
   return 0;
 }

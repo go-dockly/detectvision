@@ -16,6 +16,7 @@ RUN rm -rf build
 # skip OpenCV/ONNX client; build messaging + clickhouse path
 RUN cmake -B build -DCMAKE_BUILD_TYPE=Release \
       -DBUILD_CLICKHOUSE_CONSUMER=ON \
+      -DWITH_OTEL=ON \
     && cmake --build build -j$(nproc) \
          --target nats_publisher ingest_server consumer clickhouse_consumer
 

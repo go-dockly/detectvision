@@ -30,7 +30,7 @@ WORKDIR /src
 COPY . .
 RUN rm -rf build
 
-# Ensure model exists and is stamped with version <= 21 for safety
+# Ensure model exists and is stamped with version <= 21
 RUN set -eux; \
   if [ ! -f models/yolo11n.onnx ]; then \
     ./scripts/download_model.sh; \
@@ -58,6 +58,7 @@ PY
 RUN cmake -B build -DCMAKE_BUILD_TYPE=Release \
       -DONNXRUNTIME_ROOT=/opt/onnxruntime \
       -DBUILD_CLICKHOUSE_CONSUMER=OFF \
+      -DWITH_OTEL=ON \
     && cmake --build build -j$(nproc) --target edge_client
 
 # runtime

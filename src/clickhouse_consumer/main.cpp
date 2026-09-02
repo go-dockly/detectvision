@@ -16,6 +16,7 @@
 #include <clickhouse/columns/string.h>
 
 #include "common/env.hpp"
+#include "common/otel.hpp"
 #include "detection/v1/detection.pb.h"
 
 namespace {
@@ -348,5 +349,6 @@ int main() {
   natsSubscription_Destroy(sub);
   jsCtx_Destroy(js);
   natsConnection_Destroy(nc);
+  edge::otel::shutdown();
   return 0;
 }

@@ -6,6 +6,7 @@
 #include <spdlog/spdlog.h>
 
 #include "common/env.hpp"
+#include "common/otel.hpp"
 #include "ingest_service.hpp"
 
 namespace {
@@ -46,5 +47,6 @@ int main() {
   std::signal(SIGTERM, signal_handler);
 
   g_server->Wait();
+  edge::otel::shutdown();
   return 0;
 }
