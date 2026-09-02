@@ -10,15 +10,8 @@ processors:
   batch:
 
 exporters:
-  # Local debug – prints structured logs to container stdout
   debug:
     verbosity: detailed
-
-  # forward to real backend
-  # otlphttp/backend:
-  #   endpoint: https://your-backend:4318
-  #   headers:
-  #     Authorization: "Bearer ..."
 
 service:
   pipelines:
