@@ -72,4 +72,4 @@ grpc::Status NatsPublisherServiceImpl::PublishAlert(
   return grpc::Status::OK;
 }
 
-}  // namespace edge
+}

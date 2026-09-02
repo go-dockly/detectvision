@@ -23,4 +23,4 @@ class IngestServiceImpl final : public detection::v1::IngestService::Service {
   static std::string format_seq(uint64_t seq);
 };
 
-}  // namespace edge
+}

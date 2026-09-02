@@ -19,7 +19,8 @@ services:
     environment:
       NATS_URL: nats://nats:4222
       GRPC_ADDR: 0.0.0.0:50051
-      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector-1:4318/v1/logs
+      OTEL_EXPORTER_OTLP_ENDPOINT: otel-collector:4317
+      OTEL_EXPORTER_OTLP_INSECURE: true
       OTEL_ENVIRONMENT: docker
     depends_on:
       nats:
@@ -35,7 +36,8 @@ services:
     environment:
       GRPC_ADDR: 0.0.0.0:50052
       PUBLISHER_ADDR: nats-publisher:50051
-      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector-1:4318/v1/logs
+      OTEL_EXPORTER_OTLP_ENDPOINT: otel-collector:4317
+      OTEL_EXPORTER_OTLP_INSECURE: true
       OTEL_ENVIRONMENT: docker
     depends_on: [nats-publisher, otel-collector]
     ports:
@@ -48,7 +50,8 @@ services:
     command: ["/app/consumer"]
     environment:
       NATS_URL: nats://nats:4222
-      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector-1:4318/v1/logs
+      OTEL_EXPORTER_OTLP_ENDPOINT: otel-collector:4317
+      OTEL_EXPORTER_OTLP_INSECURE: true
       OTEL_ENVIRONMENT: docker
     depends_on: [nats-publisher, otel-collector]
 
@@ -58,17 +61,14 @@ services:
       CLICKHOUSE_USER: default
       CLICKHOUSE_PASSWORD: "pass"
       CLICKHOUSE_DB: default
-      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector-1:4318/v1/logs
-      OTEL_ENVIRONMENT: docker
     ports:
       - "8123:8123"
       - "9000:9000"
-    volumes:
-      - clickhouse-data:/var/lib/clickhouse
-    ulimits:
-      nofile:
-        soft: 262144
-        hard: 262144
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:8123/ping"]
+      interval: 3s
+      timeout: 2s
+      retries: 10
 
   clickhouse-consumer:
     build:
@@ -83,16 +83,27 @@ services:
       CLICKHOUSE_USER: default
       CLICKHOUSE_PASSWORD: "pass"
       CLICKHOUSE_DB: default
-      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector-1:4318/v1/logs
+      OTEL_EXPORTER_OTLP_ENDPOINT: otel-collector:4317
+      OTEL_EXPORTER_OTLP_INSECURE: true
       OTEL_ENVIRONMENT: docker
     depends_on:
-      - nats-publisher
-      - clickhouse
-      - otel-collector
+      clickhouse:
+        condition: service_healthy
+      nats-publisher:
+        condition: service_started
+      otel-collector:
+        condition: service_started
 
-  # CV client – build with Dockerfile.client (OpenCV + ONNX)
-  # Usage:
-  #   docker compose run --rm -v /path/to/video.mp4:/data/video.mp4:ro client
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.104.0
+    command: ["--config=/etc/otelcol/config.yaml"]
+    volumes:
+      - ./otel-config.yaml:/etc/otelcol/config.yaml:ro
+    ports:
+      - "4317:4317"   # grpc
+      - "4318:4318"   # http
+
+  # CV client run
   #   docker compose run --rm client /data/video.mp4 /app/models/yolo11n.onnx
   client:
     build:
@@ -101,24 +112,15 @@ services:
     profiles: ["client"]
     environment:
       INGEST_ADDR: ingest:50052
-      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector-1:4318/v1/logs
+      OTEL_EXPORTER_OTLP_ENDPOINT: otel-collector:4317
+      OTEL_EXPORTER_OTLP_INSECURE: true
       OTEL_ENVIRONMENT: docker
     depends_on: [ingest, otel-collector]
-    # optional: pass through webcam on Linux
+    # pass through webcam on Linux
     # devices:
     #   - /dev/video0:/dev/video0
     volumes:
       - ${VIDEO_FILE:-./assets/sample.mp4}:/data/video.mp4:ro
-
-  # OpenTelemetry collector receives OTLP and prints / forwards logs
-  otel-collector:
-    image: otel/opentelemetry-collector-contrib:0.104.0
-    command: ["--config=/etc/otelcol/config.yaml"]
-    volumes:
-      - ./assets/otel-config.yaml:/etc/otelcol/config.yaml:ro
-    ports:
-      - "4317:4317"   # grpc
-      - "4318:4318"   # http
       
 volumes:
   clickhouse-data:

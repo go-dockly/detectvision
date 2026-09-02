@@ -16,9 +16,11 @@ void signal_handler(int) {
   spdlog::info("shutting down ingest server...");
   if (g_server) g_server->Shutdown();
 }
-}  // namespace
+}
 
 int main() {
+  // init spdlog otel sink
+  edge::otel::init("ingest-service", "0.1.0");
   spdlog::set_level(spdlog::level::info);
 
   const std::string listen_addr =
@@ -37,10 +39,10 @@ int main() {
   builder.RegisterService(&service);
   g_server = builder.BuildAndStart();
   if (!g_server) {
-    spdlog::error("failed to start ingest gRPC server on {}", listen_addr);
+    spdlog::error("failed to start ingest grpc server on {}", listen_addr);
     return 1;
   }
-  spdlog::info("Ingest gRPC listening on {} (publisher at {})",
+  spdlog::info("Ingest grpc listening on {} (publisher at {})",
                listen_addr, publisher_addr);
 
   std::signal(SIGINT, signal_handler);

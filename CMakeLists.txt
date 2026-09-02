@@ -6,56 +6,50 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
+set(CMAKE_TLS_VERIFY TRUE)
 
 include(FetchContent)
+set(FETCHCONTENT_QUIET FALSE)
 
-# System deps
+# Sys Deps
 find_package(Threads REQUIRED)
+
 find_package(OpenCV QUIET COMPONENTS core imgproc imgcodecs videoio highgui)
 if(NOT OpenCV_FOUND)
   message(STATUS "OpenCV not found – edge_cv / edge_client will be skipped")
 endif()
 
-# Protobuf + gRPC
-# Homebrew often ships a protobuf CMake export set that is incomplete relative
-# to what gRPC's CONFIG package expects (missing libupb targets). Prefer
-# pkg-config on Apple; fall back to CONFIG elsewhere, then pkg-config.
 find_package(PkgConfig REQUIRED)
 
+# grpc / protobuf
 set(_use_grpc_config FALSE)
 if(NOT APPLE)
-  # CONFIG path: let gRPC pull Protobuf as a dependency
-  find_package(gRPC CONFIG QUIET)
+  find_package(grpc CONFIG QUIET)
   if(gRPC_FOUND)
     set(_use_grpc_config TRUE)
   endif()
 endif()
 
 if(_use_grpc_config)
-  set(_GRPC_GRPCPP gRPC::grpc++)
-  if(TARGET gRPC::grpc_cpp_plugin)
-    set(_GRPC_CPP_PLUGIN $<TARGET_FILE:gRPC::grpc_cpp_plugin>)
+  set(_GRPC_GRPCPP grpc::grpc++)
+  if(TARGET grpc::grpc_cpp_plugin)
+    set(_GRPC_CPP_PLUGIN $<TARGET_FILE:grpc::grpc_cpp_plugin>)
   else()
     find_program(_GRPC_CPP_PLUGIN grpc_cpp_plugin REQUIRED)
   endif()
-  # Protobuf targets come from gRPC's find_dependency
   if(NOT TARGET protobuf::libprotobuf)
     find_package(Protobuf REQUIRED)
   endif()
-  message(STATUS "Using gRPC (CONFIG)")
+  message(STATUS "Using grpc (CONFIG)")
 else()
-  # pkg-config path (reliable on Homebrew / macOS)
   pkg_check_modules(PROTOBUF REQUIRED IMPORTED_TARGET protobuf)
   pkg_check_modules(GRPC REQUIRED IMPORTED_TARGET grpc++)
-  # Provide protobuf::libprotobuf alias if missing so rest of file is uniform
   if(NOT TARGET protobuf::libprotobuf)
     add_library(protobuf::libprotobuf ALIAS PkgConfig::PROTOBUF)
   endif()
-  # well-known types (timestamp.proto etc.) live under the protobuf include dir
   if(PROTOBUF_INCLUDE_DIRS)
     set(Protobuf_INCLUDE_DIRS ${PROTOBUF_INCLUDE_DIRS})
   else()
-    # Homebrew fallback
     execute_process(COMMAND brew --prefix protobuf
       OUTPUT_VARIABLE _PB_PREFIX OUTPUT_STRIP_TRAILING_WHITESPACE
       ERROR_QUIET)
@@ -66,7 +60,7 @@ else()
   set(_GRPC_GRPCPP PkgConfig::GRPC)
   find_program(_GRPC_CPP_PLUGIN grpc_cpp_plugin REQUIRED)
   find_program(_PROTOBUF_PROTOC protoc REQUIRED)
-  message(STATUS "Using gRPC + Protobuf via pkg-config")
+  message(STATUS "Using grpc + Protobuf via pkg-config")
   message(STATUS "  Protobuf includes: ${Protobuf_INCLUDE_DIRS}")
 endif()
 
@@ -78,68 +72,50 @@ if(NOT DEFINED _PROTOBUF_PROTOC)
   endif()
 endif()
 
-# ONNX Runtime
+# onnx runtime
 if(NOT DEFINED ONNXRUNTIME_ROOT)
   if(DEFINED ENV{ONNXRUNTIME_ROOT})
     set(ONNXRUNTIME_ROOT $ENV{ONNXRUNTIME_ROOT})
   endif()
 endif()
+
 if(ONNXRUNTIME_ROOT)
   set(ONNXRUNTIME_INCLUDE_DIRS ${ONNXRUNTIME_ROOT}/include)
   find_library(ONNXRUNTIME_LIB onnxruntime
     PATHS ${ONNXRUNTIME_ROOT}/lib ${ONNXRUNTIME_ROOT}/lib64
     NO_DEFAULT_PATH)
 else()
-  find_path(ONNXRUNTIME_INCLUDE_DIRS onnxruntime_cxx_api.h)
-  find_library(ONNXRUNTIME_LIB onnxruntime)
+  find_path(ONNXRUNTIME_INCLUDE_DIRS onnxruntime_cxx_api.h QUIET)
+  find_library(ONNXRUNTIME_LIB onnxruntime QUIET)
 endif()
+
 if(NOT ONNXRUNTIME_LIB)
-  message(WARNING "ONNX Runtime not found – edge_cv client will not build")
+  message(STATUS "ONNX Runtime not found – edge_cv client will not build")
 endif()
 
+# open telemetry
 option(WITH_OTEL "Enable OpenTelemetry structured logging via spdlog sink" OFF)
-
 if(WITH_OTEL)
   message(STATUS "OpenTelemetry support: ON")
 
-  # Core SDK (Logs + Resource + OTLP HTTP exporter)
+  set(BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
   set(BUILD_TESTING OFF CACHE BOOL "" FORCE)
-  set(WITH_OTLP_HTTP ON CACHE BOOL "" FORCE)
-  set(WITH_OTLP_GRPC OFF CACHE BOOL "" FORCE)   # keep deps light; HTTP enough
-  set(WITH_LOGS_PREVIEW ON CACHE BOOL "" FORCE) # older tags; no-op on recent
+  set(WITH_OTLP_HTTP OFF CACHE BOOL "" FORCE)
+  set(WITH_OTLP_GRPC ON CACHE BOOL "" FORCE)
+  set(WITH_LOGS_PREVIEW ON CACHE BOOL "" FORCE)
   set(WITH_STL ON CACHE BOOL "" FORCE)
 
   FetchContent_Declare(opentelemetry-cpp
     GIT_REPOSITORY https://github.com/open-telemetry/opentelemetry-cpp.git
     GIT_TAG v1.17.0
-    GIT_SHALLOW TRUE)
-  FetchContent_MakeAvailable(opentelemetry-cpp)
-
-  # spdlog sink lives in the contrib repo
-  FetchContent_Declare(opentelemetry-cpp-contrib
-    GIT_REPOSITORY https://github.com/open-telemetry/opentelemetry-cpp-contrib.git
-    GIT_TAG main
-    GIT_SHALLOW TRUE)
-  FetchContent_GetProperties(opentelemetry-cpp-contrib)
-  if(NOT opentelemetry-cpp-contrib_POPULATED)
-    FetchContent_Populate(opentelemetry-cpp-contrib)
-  endif()
-  add_subdirectory(
-    ${opentelemetry-cpp-contrib_SOURCE_DIR}/instrumentation/spdlog
-    ${CMAKE_BINARY_DIR}/otel-spdlog-sink
+    GIT_SHALLOW TRUE
   )
+  FetchContent_MakeAvailable(opentelemetry-cpp)
 else()
   message(STATUS "OpenTelemetry support: OFF (enable with -DWITH_OTEL=ON)")
 endif()
 
-find_package(nlohmann_json QUIET)
-if(NOT nlohmann_json_FOUND)
-  FetchContent_Declare(json
-    GIT_REPOSITORY https://github.com/nlohmann/json.git
-    GIT_TAG v3.11.3 GIT_SHALLOW TRUE)
-  FetchContent_MakeAvailable(json)
-endif()
-
+# spdlog
 find_package(spdlog QUIET)
 if(NOT spdlog_FOUND)
   FetchContent_Declare(spdlog
@@ -150,7 +126,7 @@ if(NOT spdlog_FOUND)
   FetchContent_MakeAvailable(spdlog)
 endif()
 
-# NATS C client
+# nats
 find_package(NATS QUIET)
 if(NOT NATS_FOUND)
   FetchContent_Declare(nats
@@ -166,7 +142,7 @@ if(NOT NATS_FOUND)
   set(NATS_INCLUDE_DIRS ${nats_SOURCE_DIR}/src)
 endif()
 
-# Protobuf / gRPC
+# proto compilation
 set(PROTO_ROOT ${CMAKE_CURRENT_SOURCE_DIR}/proto)
 set(PROTO_GEN_DIR ${CMAKE_CURRENT_BINARY_DIR}/generated)
 file(MAKE_DIRECTORY ${PROTO_GEN_DIR})
@@ -188,8 +164,8 @@ foreach(proto ${PROTO_FILES})
   get_filename_component(proto_dir ${proto} DIRECTORY)
   file(RELATIVE_PATH rel_dir ${PROTO_ROOT} ${proto_dir})
 
-  set(pb_cc  ${PROTO_GEN_DIR}/${rel_dir}/${proto_name}.pb.cc)
-  set(pb_h   ${PROTO_GEN_DIR}/${rel_dir}/${proto_name}.pb.h)
+  set(pb_cc   ${PROTO_GEN_DIR}/${rel_dir}/${proto_name}.pb.cc)
+  set(pb_h    ${PROTO_GEN_DIR}/${rel_dir}/${proto_name}.pb.h)
   set(grpc_cc ${PROTO_GEN_DIR}/${rel_dir}/${proto_name}.grpc.pb.cc)
   set(grpc_h  ${PROTO_GEN_DIR}/${rel_dir}/${proto_name}.grpc.pb.h)
 
@@ -222,16 +198,17 @@ target_link_libraries(edge_proto PUBLIC
 )
 
 # common
-add_library(edge_common
+add_library(edge_common STATIC
   src/common/otel.cpp
 )
+
 target_include_directories(edge_common PUBLIC
   ${CMAKE_CURRENT_SOURCE_DIR}/src
   ${NATS_INCLUDE_DIRS}
 )
+
 target_link_libraries(edge_common PUBLIC
   edge_proto
-  nlohmann_json::nlohmann_json
   spdlog::spdlog
   ${NATS_LIBRARIES}
   Threads::Threads
@@ -240,18 +217,12 @@ target_link_libraries(edge_common PUBLIC
 if(WITH_OTEL)
   target_compile_definitions(edge_common PUBLIC WITH_OTEL)
   target_link_libraries(edge_common PUBLIC
+    opentelemetry_trace
     opentelemetry_logs
-    opentelemetry_exporter_otlp_http
-    opentelemetry_resources
-    opentelemetry_common
-    opentelemetry_spdlog_sink   # from contrib
-  )
-  target_include_directories(edge_common PUBLIC
-    ${opentelemetry-cpp-contrib_SOURCE_DIR}/instrumentation/spdlog/include
+    opentelemetry_exporter_otlp_grpc_log
   )
 endif()
 
-# CV pipeline lib + client (OpenCV / ONNX)
 if(OpenCV_FOUND AND ONNXRUNTIME_LIB)
   add_library(edge_cv
     src/cv/src/capture.cpp
@@ -274,8 +245,11 @@ if(OpenCV_FOUND AND ONNXRUNTIME_LIB)
   target_link_libraries(edge_client PRIVATE
     edge_cv edge_common edge_proto
   )
+else()
+  message(STATUS "OpenCV or ONNX Runtime missing - edge_cv and edge_client will NOT be built")
 endif()
 
+# apps
 add_executable(nats_publisher
   src/nats_publisher/main.cpp
   src/nats_publisher/publisher_service.cpp
@@ -291,12 +265,15 @@ target_link_libraries(ingest_server PRIVATE edge_common)
 add_executable(consumer src/consumer/main.cpp)
 target_link_libraries(consumer PRIVATE edge_common)
 
-# ClickHouse consumer
+# clickhouse_consumer
 option(BUILD_CLICKHOUSE_CONSUMER "Build clickhouse_consumer binary" ON)
 if(BUILD_CLICKHOUSE_CONSUMER)
   set(WITH_OPENSSL ON CACHE BOOL "" FORCE)
   set(CH_USE_ABSEIL_FOR_BIGNUM OFF CACHE BOOL "" FORCE)
   set(CH_MAP_BOOL_TO_UINT8 ON CACHE BOOL "" FORCE)
+  set(CLICKHOUSE_CLIENT_ENABLE_TESTING OFF CACHE BOOL "" FORCE)
+  set(CLICKHOUSE_CLIENT_ENABLE_EXAMPLES OFF CACHE BOOL "" FORCE)
+
   FetchContent_Declare(clickhouse-cpp
     GIT_REPOSITORY https://github.com/ClickHouse/clickhouse-cpp.git
     GIT_TAG v2.6.2
@@ -315,4 +292,8 @@ endif()
 
 message(STATUS "edge configured (C++${CMAKE_CXX_STANDARD})")
 message(STATUS "  OpenCV: ${OpenCV_VERSION}")
-message(STATUS "  ONNX Runtime: ${ONNXRUNTIME_LIB}")
+if(ONNXRUNTIME_LIB)
+  message(STATUS "  ONNX Runtime: ${ONNXRUNTIME_LIB}")
+else()
+  message(STATUS "  ONNX Runtime: Disabled")
+endif()

@@ -20,9 +20,11 @@ void signal_handler(int) {
   spdlog::info("shutting down nats publisher...");
   if (g_server) g_server->Shutdown();
 }
-}  // namespace
+}
 
 int main() {
+  // init spdlog otel sink
+  edge::otel::init("nats-publisher", "0.1.0");
   spdlog::set_level(spdlog::level::info);
 
   const std::string nats_url =
@@ -90,10 +92,10 @@ int main() {
   builder.RegisterService(&service);
   g_server = builder.BuildAndStart();
   if (!g_server) {
-    spdlog::error("failed to start publisher gRPC on {}", listen_addr);
+    spdlog::error("failed to start publisher grpc on {}", listen_addr);
     return 1;
   }
-  spdlog::info("NATS Publisher gRPC listening on {}", listen_addr);
+  spdlog::info("NATS Publisher grpc listening on {}", listen_addr);
 
   std::signal(SIGINT, signal_handler);
   std::signal(SIGTERM, signal_handler);

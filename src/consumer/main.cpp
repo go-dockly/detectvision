@@ -15,9 +15,11 @@
 namespace {
 std::atomic<bool> g_running{true};
 void on_signal(int) { g_running = false; }
-}  // namespace
+}
 
 int main() {
+  // init spdlog otel sink
+  edge::otel::init("mock-consumer", "0.1.0");
   spdlog::set_level(spdlog::level::info);
 
   const std::string nats_url =

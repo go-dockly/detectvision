@@ -44,9 +44,11 @@ detection::v1::Alert to_proto(const edge_cv::Alert& a, const std::string& source
   return out;
 }
 
-}  // namespace
+}
 
 int main(int argc, char** argv) {
+  // init spdlog otel sink
+  edge::otel::init("edge-client", "0.1.0");
   spdlog::set_level(spdlog::level::info);
 
   if (argc < 3) {
@@ -83,7 +85,7 @@ int main(int argc, char** argv) {
       {"truck", 0.50f},
   };
 
-  // On every alert → fire-and-forget gRPC IngestAlert
+  // On every alert → fire-and-forget grpc IngestAlert
   cfg.on_alert = [&](const edge_cv::Alert& alert) {
     if (alert.detections.empty() && !alert.watchlist_hit) return;
 
@@ -115,7 +117,7 @@ int main(int argc, char** argv) {
   std::signal(SIGINT, on_signal);
   std::signal(SIGTERM, on_signal);
 
-  spdlog::info("edge_cv gRPC client running → {}", ingest_addr);
+  spdlog::info("edge_cv grpc client running → {}", ingest_addr);
   while (g_running && pipeline.is_running()) {
     std::this_thread::sleep_for(std::chrono::milliseconds(200));
   }

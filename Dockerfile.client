@@ -1,13 +1,14 @@
-# CV gRPC client (OpenCV + ONNX Runtime + edge_client)
+# client
 FROM ubuntu:24.04 AS builder
 
 ENV DEBIAN_FRONTEND=noninteractive
+ENV GIT_TERMINAL_PROMPT=0
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    build-essential cmake git pkg-config curl ca-certificates \
+    build-essential cmake git pkg-config curl \
     python3 python3-pip \
     libprotobuf-dev protobuf-compiler \
     libgrpc++-dev protobuf-compiler-grpc \
-    libssl-dev \
+    libssl-dev libcurl4-openssl-dev ca-certificates \
     libopencv-dev \
     && rm -rf /var/lib/apt/lists/* \
     && pip3 install --break-system-packages --no-cache-dir "onnx>=1.16,<1.19"
@@ -28,9 +29,9 @@ RUN set -eux; \
 
 WORKDIR /src
 COPY . .
-RUN rm -rf build
+RUN rm -rf build CMakeCache.txt CMakeFiles
 
-# Ensure model exists and is stamped with version <= 21
+# ensure model exists version <= 21
 RUN set -eux; \
   if [ ! -f models/yolo11n.onnx ]; then \
     ./scripts/download_model.sh; \
@@ -61,7 +62,7 @@ RUN cmake -B build -DCMAKE_BUILD_TYPE=Release \
       -DWITH_OTEL=ON \
     && cmake --build build -j$(nproc) --target edge_client
 
-# runtime
+# onnx runtime
 FROM ubuntu:24.04
 ENV DEBIAN_FRONTEND=noninteractive
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -80,7 +81,7 @@ COPY --from=builder /src/build/edge_client /app/edge_client
 COPY --from=builder /src/models/yolo11n.onnx /app/models/yolo11n.onnx
 
 ENV INGEST_ADDR=ingest:50052
-# Docker image is CPU-only ORT
+# docker image CPU-only ORT
 ENV EDGE_FORCE_CPU=1
 ENTRYPOINT ["/app/edge_client"]
 CMD ["/data/video.mp4", "/app/models/yolo11n.onnx"]

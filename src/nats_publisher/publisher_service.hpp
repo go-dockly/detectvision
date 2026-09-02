@@ -25,4 +25,4 @@ class NatsPublisherServiceImpl final
   static constexpr const char* kDefaultSubject = "cv.alert";
 };
 
-}  // namespace edge
+}

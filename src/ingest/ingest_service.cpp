@@ -59,4 +59,4 @@ grpc::Status IngestServiceImpl::IngestAlert(
   return grpc::Status::OK;
 }
 
-}  // namespace edge
+}

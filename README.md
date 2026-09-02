@@ -5,7 +5,7 @@ video → ONNX YOLO → watchlist alerts → NATS → ClickHouse.
 Built as a systems-level exploration of real-time on-prem recognition flows.
 
 ```
-┌──────────────┐  gRPC   ┌──────────────┐  gRPC   ┌──────────────────┐
+┌──────────────┐  grpc   ┌──────────────┐  grpc   ┌──────────────────┐
 │ edge_client  │ ──────► │ ingest_server│ ──────► │ nats_publisher   │
 │ (CV pipeline)│         │   :50052     │         │     :50051       │
 └──────────────┘         └──────────────┘         └────────┬─────────┘
@@ -30,7 +30,7 @@ Built as a systems-level exploration of real-time on-prem recognition flows.
 
 - CMake ≥ 3.20, C++20
 - OpenCV, ONNX Runtime
-- protobuf + gRPC
+- protobuf + grpc
 - NATS server
 
 ```bash
@@ -47,7 +47,7 @@ sudo apt install cmake g++ libopencv-dev \
 Messaging stack:
 
 ```bash
-./scripts/download_model.sh
+./assets/download_model.sh
 
 docker compose up -d
 
@@ -58,41 +58,19 @@ docker compose run --rm   -v /absolute/path/to/video.mp4:/data/video.mp4:ro   cl
 VIDEO_FILE=/absolute/path/to/video.mp4 docker compose run --rm client
 ```
 
-### ENV
-
-| Variable                          | Default                              | Used by                          |
-| --------------------------------- | ------------------------------------ | -------------------------------- |
-| `INGEST_ADDR`                     | `localhost:50052`                    | edge_client                      |
-| `GRPC_ADDR`                       | `0.0.0.0:50051/52`                   | publisher / ingest               |
-| `PUBLISHER_ADDR`                  | `localhost:50051`                    | ingest                           |
-| `NATS_URL`                        | `nats://localhost:4222`              | publisher, consumer, ch-consumer |
-| `OTEL_EXPORTER_OTLP_ENDPOINT`     | `http://localhost:4318/v1/logs`      | all services ( `WITH_OTEL`)  |
-| `OTEL_EXPORTER_OTLP_LOGS_ENDPOINT`|  fallback to above                   | all services ( `WITH_OTEL`)  |
-| `OTEL_ENVIRONMENT`                | `development`                        | all services ( `WITH_OTEL`)  |
-
 ## Pipeline
 
 1. **Capture** – OpenCV `VideoCapture` (USB index or file) on its own thread, drop-old queue.
 2. **Inference** – ONNX YOLO (letterbox + CHW, NMS inside detector).
 3. **Post-process** – confidence floor, class filter, in-memory watchlist.
-4. **Alert** → gRPC `IngestAlert` (frame_id, boxes, confidence, e2e latency, watchlist hit).
+4. **Alert** → grpc `IngestAlert` (frame_id, boxes, confidence, e2e latency, watchlist hit).
 
 ## Build
-
 
 ```bash
 cmake -B build -DCMAKE_BUILD_TYPE=Release \
   -DONNXRUNTIME_ROOT=/path/to/onnxruntime
 cmake --build build -j
-```
-
-## Run (locally)
-
-```bash
-# terminal 5 CV client (webcam 0 or mp4)
-./build/edge_client 0 models/yolo11n.onnx
-# or
-./build/edge_client /path/to/video.mp4 models/yolo11n.onnx localhost:50052
 ```
 
 ## ClickHouse
@@ -130,16 +108,9 @@ Disable: `-DBUILD_CLICKHOUSE_CONSUMER=OFF`.
 
 ## Observability (OpenTelemetry structured logging)
 
-Services use **spdlog**
-
-### Enable at build time
+Services use **spdlog** to enable at build time
 
 ```bash
 cmake -B build -DWITH_OTEL=ON \
-  -DCMAKE_BUILD_TYPE=Release \
-  -DONNXRUNTIME_ROOT=/path/to/onnxruntime
-cmake --build build -j
 ```
-When `WITH_OTEL=OFF` (default) the OTel code is compiled out.
-Each process sets `service.name` automatically (`edge_client`, `ingest_server`,
-`nats_publisher`, `consumer`, `clickhouse_consumer`).
+When `WITH_OTEL=OFF` otel code is compiled out. Each process sets `service.name` on init.

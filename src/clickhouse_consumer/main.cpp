@@ -144,9 +144,12 @@ void insert_batch(clickhouse::Client& ch,
   ch.Insert("cv_detections", block);
 }
 
-}  // namespace
+}
 
 int main() {
+  // init spdlog otel sink
+  edge::otel::init("clickhouse-consumer", "0.1.0");
+  
   spdlog::set_level(spdlog::level::info);
 
   const std::string nats_url =

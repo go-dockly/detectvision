@@ -12,4 +12,4 @@ inline std::string getenv_or(const char* key, const std::string& fallback) {
   return fallback;
 }
 
-}  // namespace edge
+}
