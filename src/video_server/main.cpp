@@ -5,6 +5,7 @@
 #include "absl/base/config.h"
 #include "absl/base/options.h"
 #include <grpcpp/grpcpp.h>
+#include <grpcpp/ext/proto_server_reflection_plugin.h>
 #include <spdlog/spdlog.h>
 
 #include <clickhouse/client.h>
@@ -62,11 +63,12 @@ int main() {
 
   edge::AnnotatedVideoServiceImpl service(std::move(ch), video_root);
 
+  grpc::reflection::InitProtoReflectionServerBuilderPlugin();
   grpc::ServerBuilder builder;
   builder.AddListeningPort(listen_addr, grpc::InsecureServerCredentials());
   builder.RegisterService(&service);
 
-  // Larger message size for JPEG frames
+  // Larger message size for jpg frames
   builder.SetMaxSendMessageSize(16 * 1024 * 1024);
   builder.SetMaxReceiveMessageSize(4 * 1024 * 1024);
 

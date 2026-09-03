@@ -32,7 +32,7 @@ class AnnotatedVideoServiceImpl final
       grpc::ServerWriter<detection::v1::AnnotatedFrame>* writer) override;
 
  private:
-  // Load all detections for the given source + frame range, grouped by frame_id
+  // Load all detections for the given src + frame range, grouped by frame_id
   std::unordered_map<int64_t, std::vector<DetBox>> load_detections(
       const std::string& source, int64_t start_frame, int64_t end_frame);
 

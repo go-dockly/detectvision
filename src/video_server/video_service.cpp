@@ -39,6 +39,9 @@ AnnotatedVideoServiceImpl::load_detections(const std::string& source,
 
   try {
     ch_->Select(sql.str(), [&](const clickhouse::Block& block) {
+      if (block.GetColumnCount() == 0 || block.GetRowCount() == 0) {
+        return;   // ignore empty progress block
+      }
       auto col_fid  = block[0]->As<clickhouse::ColumnInt64>();
       auto col_cid  = block[1]->As<clickhouse::ColumnInt32>();
       auto col_name = block[2]->As<clickhouse::ColumnString>();

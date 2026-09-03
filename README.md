@@ -54,7 +54,7 @@ docker compose up -d
 # run client on a video file
 docker compose run --rm   -v /absolute/path/to/video.mp4:/data/video.mp4:ro   client
 
-# or set VIDEO_FILE as default volume mount
+# or set VIDEO_FILE as volume mount
 VIDEO_FILE=/absolute/path/to/video.mp4 docker compose run --rm client
 ```
 
@@ -66,7 +66,10 @@ VIDEO_FILE=/absolute/path/to/video.mp4 docker compose run --rm client
 4. **Alert** → grpc `IngestAlert` (frame_id, boxes, confidence, e2e latency, watchlist hit).
 
 ## Stream with grpcurl
+
 ```bash
+docker compose build --no-cache video_server
+...
 grpcurl -plaintext -d '{
   "source": "sample.mp4",
   "only_with_detections": false,

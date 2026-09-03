@@ -11,7 +11,7 @@ set(CMAKE_TLS_VERIFY TRUE)
 include(FetchContent)
 set(FETCHCONTENT_QUIET FALSE)
 
-# Sys Deps
+# sys
 find_package(Threads REQUIRED)
 
 find_package(OpenCV QUIET COMPONENTS core imgproc imgcodecs videoio highgui)
@@ -93,7 +93,7 @@ if(NOT ONNXRUNTIME_LIB)
   message(STATUS "ONNX Runtime not found – edge_cv client will not build")
 endif()
 
-# open telemetry
+# telemetry
 option(WITH_OTEL "Enable OpenTelemetry structured logging via spdlog sink" OFF)
 if(WITH_OTEL)
   message(STATUS "OpenTelemetry support: ON")
@@ -142,7 +142,7 @@ if(NOT NATS_FOUND)
   set(NATS_INCLUDE_DIRS ${nats_SOURCE_DIR}/src)
 endif()
 
-# proto compilation
+# proto compile
 set(PROTO_ROOT ${CMAKE_CURRENT_SOURCE_DIR}/proto)
 set(PROTO_GEN_DIR ${CMAKE_CURRENT_BINARY_DIR}/generated)
 file(MAKE_DIRECTORY ${PROTO_GEN_DIR})
@@ -322,7 +322,10 @@ if(OpenCV_FOUND AND BUILD_CLICKHOUSE_CONSUMER)
     edge_proto
     clickhouse-cpp-lib
     ${OpenCV_LIBS}
+    grpc++_reflection
   )
+  # Ubuntu linkers drop unused shared libs so force keep reflection
+  target_link_options(video_server PRIVATE "LINKER:--no-as-needed")
   message(STATUS "  video_server: ON")
 else()
   message(STATUS "  video_server: OFF (needs OpenCV + BUILD_CLICKHOUSE_CONSUMER)")

@@ -36,6 +36,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libopencv-imgproc410 \
     libopencv-imgcodecs410 \
     libopencv-videoio410 \
+    libopencv-highgui410 \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
