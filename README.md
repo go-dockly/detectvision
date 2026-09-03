@@ -73,6 +73,15 @@ cmake -B build -DCMAKE_BUILD_TYPE=Release \
 cmake --build build -j
 ```
 
+## Stream with grpcurl (or write a tiny client)
+```bash
+grpcurl -plaintext -d '{
+  "source": "sample.mp4",
+  "only_with_detections": false,
+  "jpeg_quality": 85
+}' localhost:50053 detection.v1.AnnotatedVideoService/StreamAnnotatedVideo
+```
+
 ## ClickHouse
 
 Table created by `clickhouse_consumer`:

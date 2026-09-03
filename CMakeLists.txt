@@ -151,6 +151,7 @@ set(PROTO_FILES
   ${PROTO_ROOT}/common/v1/error.proto
   ${PROTO_ROOT}/detection/v1/detection.proto
   ${PROTO_ROOT}/detection/v1/ingest_service.proto
+  ${PROTO_ROOT}/detection/v1/annotated_video.proto
   ${PROTO_ROOT}/nats/v1/publisher_service.proto
 )
 
@@ -273,6 +274,7 @@ if(BUILD_CLICKHOUSE_CONSUMER)
   set(CH_MAP_BOOL_TO_UINT8 ON CACHE BOOL "" FORCE)
   set(CLICKHOUSE_CLIENT_ENABLE_TESTING OFF CACHE BOOL "" FORCE)
   set(CLICKHOUSE_CLIENT_ENABLE_EXAMPLES OFF CACHE BOOL "" FORCE)
+  set(ABSL_PROPAGATE_CXX_STD ON CACHE BOOL "" FORCE)
 
   FetchContent_Declare(clickhouse-cpp
     GIT_REPOSITORY https://github.com/ClickHouse/clickhouse-cpp.git
@@ -296,4 +298,29 @@ if(ONNXRUNTIME_LIB)
   message(STATUS "  ONNX Runtime: ${ONNXRUNTIME_LIB}")
 else()
   message(STATUS "  ONNX Runtime: Disabled")
+endif()
+
+# annotated_video_server (needs OpenCV + clickhouse-cpp)
+if(OpenCV_FOUND AND BUILD_CLICKHOUSE_CONSUMER)
+  add_executable(annotated_video_server
+    src/annotated_video/main.cpp
+    src/annotated_video/annotated_video_service.cpp
+  )
+  target_include_directories(annotated_video_server PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/src
+    ${OpenCV_INCLUDE_DIRS}
+  )
+  target_compile_definitions(annotated_video_server PRIVATE
+    ABSL_ATTRIBUTE_PURE_FUNCTION=
+    ABSL_ATTRIBUTE_CONST_FUNCTION=
+  )
+  target_link_libraries(annotated_video_server PRIVATE
+    edge_common
+    edge_proto
+    clickhouse-cpp-lib
+    ${OpenCV_LIBS}
+  )
+  message(STATUS "  annotated_video_server: ON")
+else()
+  message(STATUS "  annotated_video_server: OFF (needs OpenCV + BUILD_CLICKHOUSE_CONSUMER)")
 endif()

@@ -121,6 +121,30 @@ services:
     #   - /dev/video0:/dev/video0
     volumes:
       - ${VIDEO_FILE:-./assets/sample.mp4}:/data/video.mp4:ro
-      
+
+  annotated-video:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: ["/app/annotated_video_server"]
+    environment:
+      GRPC_ADDR: 0.0.0.0:50053
+      CLICKHOUSE_HOST: clickhouse
+      CLICKHOUSE_PORT: "9000"
+      CLICKHOUSE_USER: default
+      CLICKHOUSE_PASSWORD: "pass"
+      CLICKHOUSE_DB: default
+      VIDEO_ROOT: /app/assets
+      OTEL_EXPORTER_OTLP_ENDPOINT: otel-collector:4317
+      OTEL_EXPORTER_OTLP_INSECURE: "true"
+      OTEL_ENVIRONMENT: docker
+    ports:
+      - "50053:50053"
+    volumes:
+      - ./assets:/app/assets:ro
+    depends_on:
+      clickhouse:
+        condition: service_healthy
+
 volumes:
   clickhouse-data:
