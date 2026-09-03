@@ -2,6 +2,8 @@
 #include <memory>
 #include <string>
 
+#include "absl/base/config.h"
+#include "absl/base/options.h"
 #include <grpcpp/grpcpp.h>
 #include <spdlog/spdlog.h>
 
@@ -9,19 +11,19 @@
 
 #include "common/env.hpp"
 #include "common/otel.hpp"
-#include "annotated_video_service.hpp"
+#include "video_service.hpp"
 
 namespace {
 std::unique_ptr<grpc::Server> g_server;
 
 void signal_handler(int) {
-  spdlog::info("shutting down annotated_video_server...");
+  spdlog::info("shutting down video_server...");
   if (g_server) g_server->Shutdown();
 }
-}  // namespace
+}
 
 int main() {
-  edge::otel::init("annotated-video-server", "0.1.0");
+  edge::otel::init("video_server", "0.1.0");
   spdlog::set_level(spdlog::level::info);
 
   const std::string listen_addr =

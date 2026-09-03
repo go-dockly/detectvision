@@ -271,9 +271,10 @@ option(BUILD_CLICKHOUSE_CONSUMER "Build clickhouse_consumer binary" ON)
 if(BUILD_CLICKHOUSE_CONSUMER)
   set(WITH_OPENSSL ON CACHE BOOL "" FORCE)
   set(CH_USE_ABSEIL_FOR_BIGNUM OFF CACHE BOOL "" FORCE)
-  set(CH_MAP_BOOL_TO_UINT8 ON CACHE BOOL "" FORCE)
+  set(CH_MAP_BOOL_TO_UINT8 OFF CACHE BOOL "" FORCE)
   set(CLICKHOUSE_CLIENT_ENABLE_TESTING OFF CACHE BOOL "" FORCE)
   set(CLICKHOUSE_CLIENT_ENABLE_EXAMPLES OFF CACHE BOOL "" FORCE)
+  set(WITH_SYSTEM_ABSEIL ON CACHE BOOL "" FORCE)
   set(ABSL_PROPAGATE_CXX_STD ON CACHE BOOL "" FORCE)
 
   FetchContent_Declare(clickhouse-cpp
@@ -300,27 +301,29 @@ else()
   message(STATUS "  ONNX Runtime: Disabled")
 endif()
 
-# annotated_video_server (needs OpenCV + clickhouse-cpp)
+# video_server (needs OpenCV + clickhouse-cpp)
 if(OpenCV_FOUND AND BUILD_CLICKHOUSE_CONSUMER)
-  add_executable(annotated_video_server
-    src/annotated_video/main.cpp
-    src/annotated_video/annotated_video_service.cpp
+  add_executable(video_server
+    src/video_server/main.cpp
+    src/video_server/video_service.cpp
   )
-  target_include_directories(annotated_video_server PRIVATE
+  target_include_directories(video_server PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/src
     ${OpenCV_INCLUDE_DIRS}
   )
-  target_compile_definitions(annotated_video_server PRIVATE
+  target_compile_definitions(video_server PRIVATE
     ABSL_ATTRIBUTE_PURE_FUNCTION=
     ABSL_ATTRIBUTE_CONST_FUNCTION=
+    ABSL_ATTRIBUTE_WEAK=
+    ABSL_HAVE_ATTRIBUTE_WEAK=0
   )
-  target_link_libraries(annotated_video_server PRIVATE
+  target_link_libraries(video_server PRIVATE
     edge_common
     edge_proto
     clickhouse-cpp-lib
     ${OpenCV_LIBS}
   )
-  message(STATUS "  annotated_video_server: ON")
+  message(STATUS "  video_server: ON")
 else()
-  message(STATUS "  annotated_video_server: OFF (needs OpenCV + BUILD_CLICKHOUSE_CONSUMER)")
+  message(STATUS "  video_server: OFF (needs OpenCV + BUILD_CLICKHOUSE_CONSUMER)")
 endif()

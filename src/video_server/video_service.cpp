@@ -1,8 +1,10 @@
-#include "annotated_video_service.hpp"
+#include "video_service.hpp"
 
 #include <filesystem>
 #include <sstream>
 
+#include "absl/base/config.h"
+#include "absl/base/options.h"
 #include <opencv2/imgcodecs.hpp>
 #include <opencv2/imgproc.hpp>
 #include <opencv2/videoio.hpp>
@@ -226,8 +228,8 @@ grpc::Status AnnotatedVideoServiceImpl::StreamAnnotatedVideo(
     ++frame_id;
   }
 
-  spdlog::info("finished stream – emitted {} annotated frames", emitted);
+  spdlog::info("finished stream emitted {} annotated frames", emitted);
   return grpc::Status::OK;
 }
 
-}  // namespace edge
+}

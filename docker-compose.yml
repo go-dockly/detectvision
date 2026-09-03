@@ -122,11 +122,11 @@ services:
     volumes:
       - ${VIDEO_FILE:-./assets/sample.mp4}:/data/video.mp4:ro
 
-  annotated-video:
+  video_server:
     build:
       context: .
-      dockerfile: Dockerfile
-    command: ["/app/annotated_video_server"]
+      dockerfile: Dockerfile.video
+    command: ["/app/video_server"]
     environment:
       GRPC_ADDR: 0.0.0.0:50053
       CLICKHOUSE_HOST: clickhouse

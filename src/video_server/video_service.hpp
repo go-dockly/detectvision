@@ -42,4 +42,4 @@ class AnnotatedVideoServiceImpl final
   std::string video_root_;
 };
 
-}  // namespace edge
+}
