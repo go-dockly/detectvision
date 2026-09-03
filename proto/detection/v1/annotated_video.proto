@@ -32,7 +32,23 @@ message AnnotatedFrame {
   repeated Detection detections = 6;  // the boxes that were drawn
 }
 
+message DownloadAnnotatedVideoRequest {
+  string source = 1;
+  int64 start_frame_id = 2;
+  int64 end_frame_id = 3;
+  int32 fps = 4; // Optional override; defaults to source FPS
+}
+
+message DownloadAnnotatedVideoResponse {
+  string download_url = 1; // Or raw `bytes video_data = 1;` if returning direct binary payload
+  int64 total_frames = 2;
+  double duration_sec = 3;
+}
+
 service AnnotatedVideoService {
   rpc StreamAnnotatedVideo(StreamAnnotatedVideoRequest)
       returns (stream AnnotatedFrame);
+
+  rpc DownloadAnnotatedVideo(DownloadAnnotatedVideoRequest)
+      returns (DownloadAnnotatedVideoResponse);
 }

@@ -1,6 +1,7 @@
 #pragma once
 
 #include <memory>
+#include <mutex>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -31,6 +32,11 @@ class AnnotatedVideoServiceImpl final
       const detection::v1::StreamAnnotatedVideoRequest* request,
       grpc::ServerWriter<detection::v1::AnnotatedFrame>* writer) override;
 
+  grpc::Status DownloadAnnotatedVideo(
+      grpc::ServerContext* context,
+      const detection::v1::DownloadAnnotatedVideoRequest* request,
+      detection::v1::DownloadAnnotatedVideoResponse* response) override;
+
  private:
   // Load all detections for the given src + frame range, grouped by frame_id
   std::unordered_map<int64_t, std::vector<DetBox>> load_detections(
@@ -39,6 +45,7 @@ class AnnotatedVideoServiceImpl final
   static void draw_boxes(cv::Mat& frame, const std::vector<DetBox>& boxes);
 
   std::unique_ptr<clickhouse::Client> ch_;
+  std::mutex ch_mutex_;  // Guard concurrent access to ch_
   std::string video_root_;
 };
 

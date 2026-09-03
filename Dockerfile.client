@@ -62,13 +62,13 @@ RUN cmake -B build -DCMAKE_BUILD_TYPE=Release \
     && cmake --build build -j$(nproc) --target edge_client
 
 # onnx runtime
-FROM ubuntu:24.04
+FROM ubuntu:25.04
 ENV DEBIAN_FRONTEND=noninteractive
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libprotobuf32t64 libgrpc++1.51t64 libssl3 \
-    libopencv-core406t64 libopencv-imgproc406t64 \
-    libopencv-imgcodecs406t64 libopencv-videoio406t64 \
-    libopencv-highgui406t64 \
+    libopencv-core410 libopencv-imgproc410 \
+    libopencv-imgcodecs410 libopencv-videoio410 \
+    libopencv-highgui410 \
     ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
@@ -83,4 +83,4 @@ ENV INGEST_ADDR=ingest:50052
 # docker image CPU-only ORT
 ENV EDGE_FORCE_CPU=1
 ENTRYPOINT ["/app/edge_client"]
-CMD ["/data/video.mp4", "/app/models/yolo11n.onnx"]
+CMD ["/app/assets/sample.mp4", "/app/models/yolo11n.onnx"]

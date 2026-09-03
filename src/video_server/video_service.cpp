@@ -1,21 +1,38 @@
 #include "video_service.hpp"
 
+#include <algorithm>
 #include <filesystem>
+#include <iomanip>
+#include <mutex>
 #include <sstream>
 
-#include "absl/base/config.h"
-#include "absl/base/options.h"
+#include <clickhouse/columns/numeric.h>
+#include <clickhouse/columns/string.h>
 #include <opencv2/imgcodecs.hpp>
 #include <opencv2/imgproc.hpp>
 #include <opencv2/videoio.hpp>
 #include <spdlog/spdlog.h>
 
-#include <clickhouse/columns/numeric.h>
-#include <clickhouse/columns/string.h>
-
 namespace fs = std::filesystem;
 
 namespace edge {
+
+namespace {
+
+// Escapes single quotes and backslashes for string literals in SQL queries
+std::string sanitize_sql_string(const std::string& input) {
+  std::string escaped;
+  escaped.reserve(input.size());
+  for (char c : input) {
+    if (c == '\'' || c == '\\') {
+      escaped.push_back('\\');
+    }
+    escaped.push_back(c);
+  }
+  return escaped;
+}
+
+}  // namespace
 
 AnnotatedVideoServiceImpl::AnnotatedVideoServiceImpl(
     std::unique_ptr<clickhouse::Client> ch, std::string video_root)
@@ -27,10 +44,13 @@ AnnotatedVideoServiceImpl::load_detections(const std::string& source,
                                            int64_t end_frame) {
   std::unordered_map<int64_t, std::vector<DetBox>> out;
 
+  // sanitize src prevent sqli
+  const std::string safe_source = sanitize_sql_string(source);
+
   std::ostringstream sql;
   sql << "SELECT frame_id, class_id, class_name, confidence, x1, y1, x2, y2 "
       << "FROM cv_detections "
-      << "WHERE source = '" << source << "' "
+      << "WHERE source = '" << safe_source << "' "
       << "AND frame_id >= " << start_frame << " ";
   if (end_frame > 0) {
     sql << "AND frame_id < " << end_frame << " ";
@@ -38,9 +58,12 @@ AnnotatedVideoServiceImpl::load_detections(const std::string& source,
   sql << "ORDER BY frame_id";
 
   try {
+    // Synchronize access to clickhouse::Client across gRPC worker threads
+    std::lock_guard<std::mutex> lock(ch_mutex_);
+
     ch_->Select(sql.str(), [&](const clickhouse::Block& block) {
       if (block.GetColumnCount() == 0 || block.GetRowCount() == 0) {
-        return;   // ignore empty progress block
+        return;  // ignore empty progress block
       }
       auto col_fid  = block[0]->As<clickhouse::ColumnInt64>();
       auto col_cid  = block[1]->As<clickhouse::ColumnInt32>();
@@ -56,10 +79,10 @@ AnnotatedVideoServiceImpl::load_detections(const std::string& source,
         b.class_id   = col_cid->At(i);
         b.class_name = std::string(col_name->At(i));
         b.confidence = col_conf->At(i);
-        b.x1 = col_x1->At(i);
-        b.y1 = col_y1->At(i);
-        b.x2 = col_x2->At(i);
-        b.y2 = col_y2->At(i);
+        b.x1         = col_x1->At(i);
+        b.y1         = col_y1->At(i);
+        b.x2         = col_x2->At(i);
+        b.y2         = col_y2->At(i);
 
         out[col_fid->At(i)].push_back(std::move(b));
       }
@@ -125,13 +148,11 @@ grpc::Status AnnotatedVideoServiceImpl::StreamAnnotatedVideo(
 
   // Basic path traversal protection
   if (!video_path.string().starts_with(fs::weakly_canonical(video_root_).string())) {
-    return grpc::Status(grpc::StatusCode::INVALID_ARGUMENT,
-                        "source path escapes VIDEO_ROOT");
+    return grpc::Status(grpc::StatusCode::INVALID_ARGUMENT, "src path escape");
   }
 
   if (!fs::exists(video_path)) {
-    return grpc::Status(grpc::StatusCode::NOT_FOUND,
-                        "video not found: " + video_path.string());
+    return grpc::Status(grpc::StatusCode::NOT_FOUND, "video not found: " + video_path.string());
   }
 
   const int64_t start_frame = std::max<int64_t>(0, request->start_frame_id());
@@ -140,11 +161,9 @@ grpc::Status AnnotatedVideoServiceImpl::StreamAnnotatedVideo(
                           ? request->jpeg_quality()
                           : 85;
 
-  // Pre-load detections (fine for sample.mp4)
+  // preload detections
   std::unordered_map<int64_t, std::vector<DetBox>> dets_by_frame;
   try {
-    // Note: we query using the *original* source string that was stored in CH.
-    // Callers must pass the same string the edge_client used (or normalize it).
     dets_by_frame = load_detections(request->source(), start_frame, end_frame);
   } catch (const std::exception& e) {
     return grpc::Status(grpc::StatusCode::INTERNAL,
@@ -232,6 +251,119 @@ grpc::Status AnnotatedVideoServiceImpl::StreamAnnotatedVideo(
   }
 
   spdlog::info("finished stream emitted {} annotated frames", emitted);
+  return grpc::Status::OK;
+}
+
+grpc::Status AnnotatedVideoServiceImpl::DownloadAnnotatedVideo(
+    grpc::ServerContext* context,
+    const detection::v1::DownloadAnnotatedVideoRequest* request,
+    detection::v1::DownloadAnnotatedVideoResponse* response) {
+
+  if (request->source().empty()) {
+    return grpc::Status(grpc::StatusCode::INVALID_ARGUMENT,
+                        "src required");
+  }
+
+  // Resolve path VIDEO_ROOT
+  fs::path video_path;
+  if (fs::path(request->source()).is_absolute()) {
+    video_path = request->source();
+  } else {
+    video_path = fs::path(video_root_) / request->source();
+  }
+  video_path = fs::weakly_canonical(video_path);
+
+  if (!video_path.string().starts_with(fs::weakly_canonical(video_root_).string())) {
+    return grpc::Status(grpc::StatusCode::INVALID_ARGUMENT,
+                        "source path escapes VIDEO_ROOT");
+  }
+
+  if (!fs::exists(video_path)) {
+    return grpc::Status(grpc::StatusCode::NOT_FOUND,
+                        "video not found: " + video_path.string());
+  }
+
+  const int64_t start_frame = std::max<int64_t>(0, request->start_frame_id());
+  const int64_t end_frame   = request->end_frame_id();
+
+  // Load detections using mutex
+  std::unordered_map<int64_t, std::vector<DetBox>> dets_by_frame;
+  try {
+    dets_by_frame = load_detections(request->source(), start_frame, end_frame);
+  } catch (const std::exception& e) {
+    return grpc::Status(grpc::StatusCode::INTERNAL,
+                        std::string("ClickHouse error: ") + e.what());
+  }
+
+  cv::VideoCapture cap(video_path.string());
+  if (!cap.isOpened()) {
+    return grpc::Status(grpc::StatusCode::INTERNAL,
+                        "failed to open video: " + video_path.string());
+  }
+
+  double fps = request->fps() > 0 ? request->fps() : cap.get(cv::CAP_PROP_FPS);
+  if (fps <= 0) fps = 30.0; // Fallback default FPS
+
+  int width = static_cast<int>(cap.get(cv::CAP_PROP_FRAME_WIDTH));
+  int height = static_cast<int>(cap.get(cv::CAP_PROP_FRAME_HEIGHT));
+
+  // Output destination file in tmp dir
+  fs::path out_path = fs::temp_directory_path() /
+                      ("annotated_" + video_path.filename().string());
+
+  cv::VideoWriter writer(out_path.string(),
+                         cv::VideoWriter::fourcc('a', 'v', 'c', '1'), // H.264
+                         fps,
+                         cv::Size(width, height));
+
+  if (!writer.isOpened()) {
+    // use mp4 if avc1 isn't available
+    writer.open(out_path.string(),
+                cv::VideoWriter::fourcc('m', 'p', '4', 'v'),
+                fps,
+                cv::Size(width, height));
+  }
+
+  if (!writer.isOpened()) {
+    return grpc::Status(grpc::StatusCode::INTERNAL,
+                        "failed to init VideoWriter for out file");
+  }
+
+  int64_t frame_id = 0;
+  int64_t processed_frames = 0;
+  cv::Mat frame;
+
+  while (cap.read(frame)) {
+    if (context->IsCancelled()) {
+      spdlog::info("download request cancelled by client");
+      break;
+    }
+
+    if (frame_id < start_frame) {
+      ++frame_id;
+      continue;
+    }
+    if (end_frame > 0 && frame_id >= end_frame) {
+      break;
+    }
+
+    auto it = dets_by_frame.find(frame_id);
+    if (it != dets_by_frame.end() && !it->second.empty()) {
+      draw_boxes(frame, it->second);
+    }
+
+    writer.write(frame);
+    ++processed_frames;
+    ++frame_id;
+  }
+
+  writer.release();
+
+  response->set_download_url(out_path.string());
+  response->set_total_frames(processed_frames);
+  response->set_duration_sec(fps > 0 ? static_cast<double>(processed_frames) / fps : 0.0);
+
+  spdlog::info("generated downloaded video at {} ({} frames)", out_path.string(), processed_frames);
   return grpc::Status::OK;
 }
 

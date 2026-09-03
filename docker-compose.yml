@@ -104,7 +104,7 @@ services:
       - "4318:4318"   # http
 
   # CV client run
-  #   docker compose run --rm client /data/video.mp4 /app/models/yolo11n.onnx
+  #   docker compose run --rm client /app/assets/sample.mp4 /app/models/yolo11n.onnx
   client:
     build:
       context: .
@@ -120,7 +120,7 @@ services:
     # devices:
     #   - /dev/video0:/dev/video0
     volumes:
-      - ${VIDEO_FILE:-./assets/sample.mp4}:/data/video.mp4:ro
+      - ${VIDEO_FILE:-./assets/sample.mp4}:/app/assets/sample.mp4:ro
 
   video_server:
     build:

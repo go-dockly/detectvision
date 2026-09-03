@@ -52,10 +52,10 @@ Messaging stack:
 docker compose up -d
 
 # run client on a video file
-docker compose run --rm   -v /absolute/path/to/video.mp4:/data/video.mp4:ro   client
+docker compose run --rm   -v /path/to/video.mp4:/data/video.mp4:ro   client
 
 # or set VIDEO_FILE as volume mount
-VIDEO_FILE=/absolute/path/to/video.mp4 docker compose run --rm client
+VIDEO_FILE=/path/to/video.mp4 docker compose run --rm client
 ```
 
 ## Pipeline
@@ -75,6 +75,15 @@ grpcurl -plaintext -d '{
   "only_with_detections": false,
   "jpeg_quality": 85
 }' localhost:50053 detection.v1.AnnotatedVideoService/StreamAnnotatedVideo
+
+grpcurl -plaintext -d '{
+  "source": "sample.mp4",
+  "start_frame_id": 0,
+  "end_frame_id": 300,
+  "fps": 30
+}' localhost:50053 detection.v1.AnnotatedVideoService/DownloadAnnotatedVideo
+# TODO create downloadable path on minio or such
+docker cp 8ff2cd0e42fd:/tmp/annotated_sample.mp4 ./
 ```
 
 ## ClickHouse
