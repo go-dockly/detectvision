@@ -65,15 +65,7 @@ VIDEO_FILE=/absolute/path/to/video.mp4 docker compose run --rm client
 3. **Post-process** – confidence floor, class filter, in-memory watchlist.
 4. **Alert** → grpc `IngestAlert` (frame_id, boxes, confidence, e2e latency, watchlist hit).
 
-## Build
-
-```bash
-cmake -B build -DCMAKE_BUILD_TYPE=Release \
-  -DONNXRUNTIME_ROOT=/path/to/onnxruntime
-cmake --build build -j
-```
-
-## Stream with grpcurl (or write a tiny client)
+## Stream with grpcurl
 ```bash
 grpcurl -plaintext -d '{
   "source": "sample.mp4",
@@ -112,14 +104,3 @@ docker exec -it edge-clickhouse-1 clickhouse-client --password pass \
   -q "SELECT class_name, count(), avg(confidence), avg(e2e_latency_ms)
       FROM cv_detections GROUP BY class_name ORDER BY count() DESC"
 ```
-
-Disable: `-DBUILD_CLICKHOUSE_CONSUMER=OFF`.
-
-## Observability (OpenTelemetry structured logging)
-
-Services use **spdlog** to enable at build time
-
-```bash
-cmake -B build -DWITH_OTEL=ON \
-```
-When `WITH_OTEL=OFF` otel code is compiled out. Each process sets `service.name` on init.

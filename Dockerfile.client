@@ -1,5 +1,4 @@
-# Dockerfile client
-FROM ubuntu:24.04 AS builder
+FROM ubuntu:25.04 AS builder
 
 ENV DEBIAN_FRONTEND=noninteractive
 ENV GIT_TERMINAL_PROMPT=0
