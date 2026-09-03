@@ -22,6 +22,9 @@ Built as a systems-level exploration of real-time on-prem recognition flows.
                                   consumer         clickhouse_consumer     
                                (prints alerts)     → cv_detections table   
 ```
+<p align="center">
+  <img src="assets/annotated_sample.gif" alt="detectvision" width="960">
+</p>
 
 ![Demo](assets/demo.png)
 ![DB](assets/clickhouse.png)
@@ -33,16 +36,7 @@ Built as a systems-level exploration of real-time on-prem recognition flows.
 - protobuf + grpc
 - NATS server
 
-```bash
-# macOS
-brew install opencv onnxruntime protobuf grpc
-
-# Ubuntu
-sudo apt install cmake g++ libopencv-dev \
-  libprotobuf-dev protobuf-compiler libgrpc++-dev protobuf-compiler-grpc
-```
-
-## Docker client
+## Client
 
 Messaging stack:
 
