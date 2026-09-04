@@ -1,6 +1,5 @@
-# edge
+# edge **low-latency CV detector pipeline**
 
-**Low-latency CV detector pipeline**
 video → ONNX YOLO → watchlist alerts → NATS → ClickHouse. 
 Built as a systems-level exploration of real-time on-prem recognition flows.
 
@@ -38,21 +37,23 @@ Built as a systems-level exploration of real-time on-prem recognition flows.
 
 ## Client
 
-Messaging stack:
-
 ```bash
-./assets/download_model.sh
+./assets/download_yolo.sh
+./assets/download_sherpa.sh
 
 docker compose up -d
 
-# run client on a video file
-docker compose run --rm   -v /path/to/video.mp4:/data/video.mp4:ro   client
+# run client on video file
+docker compose run --rm   -v ./assets/sample.mp4:/app/assets/sample.mp4:ro   client
 
-# or set VIDEO_FILE as volume mount
-VIDEO_FILE=/path/to/video.mp4 docker compose run --rm client
+# or set VIDEO_FILE env
+VIDEO_FILE=./assets/sample.mp4 docker compose run --rm client
 ```
+## Audio Pipeline
+  AudioCapture > AudioQueue (PCM chunks + timestamps) > VAD > STT engine > Transcript events > AlertCallback
 
-## Pipeline
+## Vision Pipeline
+Capture (OpenCV) > FrameQueue > Detector (ONNX YOLO) > Post-process > AlertCallback > grpc Ingest
 
 1. **Capture** – OpenCV `VideoCapture` (USB index or file) on its own thread, drop-old queue.
 2. **Inference** – ONNX YOLO (letterbox + CHW, NMS inside detector).
